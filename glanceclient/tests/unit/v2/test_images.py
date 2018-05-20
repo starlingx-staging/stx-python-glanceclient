@@ -819,7 +819,8 @@ class TestController(testtools.TestCase):
         image_id = '606b0e88-7c5a-4d54-b5bb-046105d4de6f'
         self.controller.upload(image_id, image_data)
         expect = [('PUT', '/v2/images/%s/file' % image_id,
-                  {'Content-Type': 'application/octet-stream'},
+                  {'Content-Type': 'application/octet-stream',
+                   'x-image-meta-size': 'None'},
                   image_data)]
         self.assertEqual(expect, self.api.calls)
 
@@ -828,7 +829,8 @@ class TestController(testtools.TestCase):
         image_id = '606b0e88-7c5a-4d54-b5bb-046105d4de6f'
         self.controller.upload(image_id, image_data, image_size=3)
         expect = [('PUT', '/v2/images/%s/file' % image_id,
-                  {'Content-Type': 'application/octet-stream'},
+                  {'Content-Type': 'application/octet-stream',
+                   'x-image-meta-size': '3'},
                   image_data)]
         self.assertEqual(expect, self.api.calls)
 

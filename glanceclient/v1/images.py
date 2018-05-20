@@ -31,7 +31,9 @@ UPDATE_PARAMS = ('name', 'disk_format', 'container_format', 'min_disk',
                  # compatibility with the legacy client library
                  'deleted')
 
-CREATE_PARAMS = UPDATE_PARAMS + ('id', 'store')
+CREATE_PARAMS = UPDATE_PARAMS + ('id', 'store', 'cache_raw', 'wait')
+CACHE_STATUS_CACHED = "Cached"
+CACHE_STATUS_ERROR = "Error"
 
 DEFAULT_PAGE_SIZE = 20
 
@@ -315,6 +317,7 @@ class ImageManager(base.ManagerWithFind):
                 raise TypeError(msg % field)
 
         copy_from = fields.pop('copy_from', None)
+
         hdrs = self._image_meta_to_headers(fields)
         if copy_from is not None:
             hdrs['x-glance-api-copy-from'] = copy_from
@@ -322,11 +325,14 @@ class ImageManager(base.ManagerWithFind):
         resp, body = self.client.post('/v1/images',
                                       headers=hdrs,
                                       data=image_data)
+        # Save image information.
+        image_info = body['image']
+
         return_request_id = kwargs.get('return_req_id', None)
         if return_request_id is not None:
             return_request_id.append(resp.headers.get(OS_REQ_ID_HDR, None))
 
-        return Image(self, self._format_image_meta_for_user(body['image']))
+        return Image(self, self._format_image_meta_for_user(image_info))
 
     def update(self, image, **kwargs):
         """Update an image.

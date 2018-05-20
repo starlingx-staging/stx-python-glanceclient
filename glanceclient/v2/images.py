@@ -227,7 +227,10 @@ class Controller(object):
         :param u_url: Upload url to upload the data to.
         """
         url = u_url or '/v2/images/%s/file' % image_id
-        hdrs = {'Content-Type': 'application/octet-stream'}
+        hdrs = {
+            'Content-Type': 'application/octet-stream',
+            'x-image-meta-size': str(image_size)
+        }
         body = image_data
         resp, body = self.http_client.put(url, headers=hdrs, data=body)
         return (resp, body), resp

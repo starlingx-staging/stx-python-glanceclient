@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 
+import dateutil
 import errno
 import functools
 import hashlib
@@ -24,7 +25,11 @@ import re
 import six.moves.urllib.parse as urlparse
 import sys
 import threading
+import time
 import uuid
+
+from datetime import datetime
+from dateutil import parser
 
 import six
 
@@ -201,13 +206,42 @@ def print_list(objs, fields, formatters=None, field_settings=None):
     print(encodeutils.safe_decode(pt.get_string()))
 
 
+def parse_date(string_data):
+    """Parses a dateinput string into a timezone aware Python datetime."""
+
+    if not isinstance(string_data, six.string_types):
+        return string_data
+
+    pattern = r'(\d{4}-\d{2}-\d{2}[T ])?\d{2}:\d{2}:\d{2}(\.\d{6})?Z?'
+
+    def convert_date(matchobj):
+        formats = ["%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d %H:%M:%S.%f",
+                   "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
+                   "%Y-%m-%dT%H:%M:%SZ", "%H:%M:%S"]
+        datestring = matchobj.group(0)
+        if datestring:
+            for format in formats:
+                try:
+                    datetime.strptime(datestring, format)
+                    datestring += "+0000"
+                    parsed = parser.parse(datestring)
+                    converted = parsed.astimezone(dateutil.tz.tzlocal())
+                    return datetime.strftime(converted, format)
+                except Exception:
+                    pass
+        return datestring
+
+    return re.sub(pattern, convert_date, string_data)
+
+
 def print_dict(d, max_column_width=80):
     pt = prettytable.PrettyTable(['Property', 'Value'], caching=False)
     pt.align = 'l'
     pt.max_width = max_column_width
-    for k, v in d.items():
+    for k, v in six.iteritems(d):
         if isinstance(v, (dict, list)):
             v = json.dumps(v)
+        v = parse_date(v)
         pt.add_row([k, v])
     print(encodeutils.safe_decode(pt.get_string(sortby='Property')))
 
@@ -396,6 +430,42 @@ def print_image(image_obj, human_readable=False, max_col_width=None):
         print_dict(image, max_column_width=max_col_width)
     else:
         print_dict(image)
+
+CACHE_STATUS_CACHED = "Cached"
+CACHE_STATUS_ERROR = "Error"
+
+
+def wait_for_caching(interval, gc, id):
+    """Wait until image caching has finished."""
+    timeout = time.time() + float(interval)
+
+    while True:
+        # Obtain image metadata.
+        image = gc.images.get(id)
+
+        # If there is no caching information, return.
+        cache_status = getattr(image, "cache_raw_status", "")
+        if not cache_status:
+            print('INFO: There is no information available about the '
+                  'caching status.')
+            break
+
+        # If the caching status is 'Cached' or 'Error', return.
+        if cache_status == CACHE_STATUS_CACHED or \
+           cache_status == CACHE_STATUS_ERROR:
+            print('INFO: Image caching status: %s.' % cache_status)
+            break
+
+        # If the timeout has been reached, return.
+        if interval is not 0:
+            if time.time() > timeout:
+                print('INFO: The caching timeout of %s seconds has '
+                      'been reached. Image caching status: %s.' %
+                      (interval, cache_status))
+                break
+
+        # Sleep for a second to avoid flooding with requests.
+        time.sleep(1)
 
 
 def integrity_iter(iter, checksum):

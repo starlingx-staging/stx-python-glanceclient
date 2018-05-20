@@ -29,6 +29,8 @@ import os
 import sys
 import traceback
 
+import keyring
+
 from oslo_utils import encodeutils
 from oslo_utils import importutils
 import six
@@ -60,18 +62,6 @@ class OpenStackImagesShell(object):
             'OS_PROJECT_NAME', 'OS_TENANT_NAME'))
         parser.set_defaults(os_project_id=utils.env(
             'OS_PROJECT_ID', 'OS_TENANT_ID'))
-
-        parser.add_argument('--key-file',
-                            dest='os_key',
-                            help='DEPRECATED! Use --os-key.')
-
-        parser.add_argument('--ca-file',
-                            dest='os_cacert',
-                            help='DEPRECATED! Use --os-cacert.')
-
-        parser.add_argument('--cert-file',
-                            dest='os_cert',
-                            help='DEPRECATED! Use --os-cert.')
 
         parser.add_argument('--os_tenant_id',
                             help=argparse.SUPPRESS)
@@ -357,6 +347,12 @@ class OpenStackImagesShell(object):
                 _("You must provide a username via"
                   " either --os-username or "
                   "env[OS_USERNAME]"))
+
+        if not args.os_password:
+            # priviledge check (only allow Keyring retrieval if we are root)
+            if os.geteuid() == 0:
+                args.os_password = keyring.get_password('CGCS',
+                                                        args.os_username)
 
         if not args.os_password:
             # No password, If we've got a tty, try prompting for it

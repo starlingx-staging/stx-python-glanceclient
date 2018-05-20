@@ -118,8 +118,17 @@ def do_image_list(gc, args):
 
         images = (convert_size(image) for image in images)
 
-    columns = ['ID', 'Name', 'Disk Format', 'Container Format',
-               'Size', 'Status']
+    def add_attributes(image):
+        image.raw_cache = getattr(image,
+                                  "properties", {}).get("cache_raw_status", "")
+        image.cache_size = getattr(image,
+                                   "properties", {}).get("cache_raw_size", "")
+        return image
+
+    images = (add_attributes(image) for image in images)
+
+    columns = ['ID', 'Name', 'Store', 'Disk Format', 'Container Format',
+               'Size', 'Status', 'Cache Size', 'Raw Cache']
     utils.print_list(images, columns)
 
 
@@ -177,6 +186,13 @@ def do_image_download(gc, args):
            help='ID of image to reserve.')
 @utils.arg('--name', metavar='<NAME>',
            help='Name of image.')
+@utils.arg('--cache-raw', action='store_true', default=False,
+           help=('Convert the image to RAW in the background'
+                 ' and store it for fast access.'))
+@utils.arg('--wait', metavar='<WAIT>', nargs='?',
+           type=int, default=None, const=0,
+           help=('Wait for the convertion of the image to RAW'
+                 ' to finish before returning the image.'))
 @utils.arg('--store', metavar='<STORE>',
            help='Store to upload image to.')
 @utils.arg('--disk-format', metavar='<DISK_FORMAT>',
@@ -245,6 +261,11 @@ def do_image_create(gc, args):
 
     _set_data_field(fields, args)
 
+    cache_raw = fields.pop('cache_raw', False)
+    cache_raw_wait = fields.pop('wait', None)
+    if cache_raw:
+        fields['properties']['cache_raw'] = cache_raw
+
     # Only show progress bar for local image files
     if fields.get('data') and args.progress:
         filesize = utils.get_file_size(fields['data'])
@@ -256,6 +277,8 @@ def do_image_create(gc, args):
             )
 
     image = gc.images.create(**fields)
+    if cache_raw is not False and cache_raw_wait is not None:
+        utils.wait_for_caching(cache_raw_wait, gc, image.id)
     _image_show(image, args.human_readable)
 
 

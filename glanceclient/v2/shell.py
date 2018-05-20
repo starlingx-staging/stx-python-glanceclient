@@ -59,6 +59,13 @@ def get_image_schema():
                   'passed to the client via stdin.'))
 @utils.arg('--progress', action='store_true', default=False,
            help=_('Show upload progress bar.'))
+@utils.arg('--cache-raw', action='store_true', default=False,
+           help=('Convert the image to RAW in the background'
+                 ' and store it for fast access.'))
+@utils.arg('--wait', metavar='<WAIT>', nargs='?',
+           type=int, default=None, const=0,
+           help=('Wait for the convertion of the image to RAW'
+                 ' to finish before returning the image.'))
 @utils.on_data_require_fields(DATA_FIELDS)
 def do_image_create(gc, args):
     """Create a new image."""
@@ -66,10 +73,17 @@ def do_image_create(gc, args):
     _args = [(x[0].replace('-', '_'), x[1]) for x in vars(args).items()]
     fields = dict(filter(lambda x: x[1] is not None and
                          (x[0] == 'property' or
+                          x[0] == 'cache_raw' or
+                          x[0] == 'wait' or
                           schema.is_core_property(x[0])),
                          _args))
 
     raw_properties = fields.pop('property', [])
+    cache_raw = fields.pop('cache_raw', False)
+    cache_raw_wait = fields.pop('wait', None)
+
+    if cache_raw is not False:
+        raw_properties += ['cache_raw=True']
     for datum in raw_properties:
         key, value = datum.split('=', 1)
         fields[key] = value
@@ -80,10 +94,15 @@ def do_image_create(gc, args):
                    "privileges to it" % file_name)
     image = gc.images.create(**fields)
     try:
-        if utils.get_data_file(args) is not None:
+        image_data = utils.get_data_file(args)
+        if image_data is not None:
             args.id = image['id']
-            args.size = None
+            args.size = utils.get_file_size(image_data)
             do_image_upload(gc, args)
+            # If cache_raw and wait options were chosen, wait until
+            # image is cached.
+            if cache_raw is not False and cache_raw_wait is not None:
+                utils.wait_for_caching(cache_raw_wait, gc, args.id)
             image = gc.images.get(args.id)
     finally:
         utils.print_image(image)
@@ -233,10 +252,17 @@ def do_image_list(gc, args):
     columns = ['ID', 'Name']
 
     if args.verbose:
-        columns += ['Disk_format', 'Container_format', 'Size', 'Status',
-                    'Owner']
+        columns += ['Store', 'Disk_format', 'Container_format',
+                    'Size', 'Status', 'Cache Size', 'Raw Cache', 'Owner']
 
     images = gc.images.list(**kwargs)
+
+    def add_attributes(image):
+        image.raw_cache = getattr(image, "cache_raw_status", "")
+        image.cache_size = getattr(image, "cache_raw_size", "")
+        return image
+    images = (add_attributes(image) for image in images)
+
     utils.print_list(images, columns)
 
 

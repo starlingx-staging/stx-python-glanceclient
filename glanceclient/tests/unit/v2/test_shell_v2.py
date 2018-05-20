@@ -189,7 +189,7 @@ class ShellV2Test(testtools.TestCase):
                                                 sort_key=['name', 'id'],
                                                 sort_dir=['desc', 'asc'],
                                                 filters=exp_img_filters)
-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
+            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
 
     def test_do_image_list_with_single_sort_key(self):
         input = {
@@ -223,7 +223,7 @@ class ShellV2Test(testtools.TestCase):
                                                 sort_key=['name'],
                                                 sort_dir=['desc'],
                                                 filters=exp_img_filters)
-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
+            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
 
     def test_do_image_list_new_sorting_syntax(self):
         input = {
@@ -257,7 +257,7 @@ class ShellV2Test(testtools.TestCase):
                 page_size=18,
                 sort='name:desc,size:asc',
                 filters=exp_img_filters)
-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
+            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
 
     def test_do_image_list_with_property_filter(self):
         input = {
@@ -294,7 +294,8 @@ class ShellV2Test(testtools.TestCase):
                                                 sort_key=['name'],
                                                 sort_dir=['desc'],
                                                 filters=exp_img_filters)
-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
+
+            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
 
     def test_do_image_show_human_readable(self):
         args = self._make_args({'id': 'pass', 'page_size': 18,
