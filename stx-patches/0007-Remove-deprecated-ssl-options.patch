@@ -1,0 +1,113 @@
+From c057388413f0df7712057edd37523547da906756 Mon Sep 17 00:00:00 2001
+From: Rui Yuan Dou <rydou@fiberhome.com>
+Date: Tue, 8 Aug 2017 11:06:39 +0800
+Subject: [PATCH 7/7] Remove deprecated ssl options
+
+Old deprecated ssl options block the new keystoneauth parser get the
+correct value, should be removed.
+
+Change-Id: Ie080f9a8fa7f4407b1fcbb7fb7c763152c5ec295
+Closes-Bug: 1697163
+
+Fix for JIRA exist upstream, but only in master.
+---
+ doc/source/cli/details.rst                                   | 12 +-----------
+ glanceclient/shell.py                                        | 12 ------------
+ glanceclient/tests/unit/test_shell.py                        | 11 -----------
+ .../notes/rm-deprecate-ssl-opts-c88225a4ba2285ad.yaml        |  9 +++++++++
+ 4 files changed, 10 insertions(+), 34 deletions(-)
+ create mode 100644 releasenotes/notes/rm-deprecate-ssl-opts-c88225a4ba2285ad.yaml
+
+diff --git a/doc/source/cli/details.rst b/doc/source/cli/details.rst
+index 1348c81..8b01266 100644
+--- a/doc/source/cli/details.rst
++++ b/doc/source/cli/details.rst
+@@ -23,8 +23,7 @@ glance usage
+    usage: glance [--version] [-d] [-v] [--get-schema] [-f]
+                  [--os-image-url OS_IMAGE_URL]
+                  [--os-image-api-version OS_IMAGE_API_VERSION]
+-                 [--profile HMAC_KEY] [--key-file OS_KEY] [--ca-file OS_CACERT]
+-                 [--cert-file OS_CERT] [--os-region-name OS_REGION_NAME]
++                 [--profile HMAC_KEY] [--os-region-name OS_REGION_NAME]
+                  [--os-auth-token OS_AUTH_TOKEN]
+                  [--os-service-type OS_SERVICE_TYPE]
+                  [--os-endpoint-type OS_ENDPOINT_TYPE] [--insecure]
+@@ -101,15 +100,6 @@ glance optional arguments
+   profiling will not be triggered even if osprofiler is
+   enabled on server side. Defaults to ``env[OS_PROFILE]``.
+ 
+-``--key-file OS_KEY``
+-  **DEPRECATED!** Use --os-key.
+-
+-``--ca-file OS_CACERT``
+-  **DEPRECATED!** Use --os-cacert.
+-
+-``--cert-file OS_CERT``
+-  **DEPRECATED!** Use --os-cert.
+-
+ ``--os-region-name OS_REGION_NAME``
+   Defaults to ``env[OS_REGION_NAME]``.
+ 
+diff --git a/glanceclient/shell.py b/glanceclient/shell.py
+index 6b0672e..c0dfa61 100644
+--- a/glanceclient/shell.py
++++ b/glanceclient/shell.py
+@@ -63,18 +63,6 @@ class OpenStackImagesShell(object):
+         parser.set_defaults(os_project_id=utils.env(
+             'OS_PROJECT_ID', 'OS_TENANT_ID'))
+ 
+-        parser.add_argument('--key-file',
+-                            dest='os_key',
+-                            help='DEPRECATED! Use --os-key.')
+-
+-        parser.add_argument('--ca-file',
+-                            dest='os_cacert',
+-                            help='DEPRECATED! Use --os-cacert.')
+-
+-        parser.add_argument('--cert-file',
+-                            dest='os_cert',
+-                            help='DEPRECATED! Use --os-cert.')
+-
+         parser.add_argument('--os_tenant_id',
+                             help=argparse.SUPPRESS)
+ 
+diff --git a/glanceclient/tests/unit/test_shell.py b/glanceclient/tests/unit/test_shell.py
+index 5e59be1..898a9eb 100644
+--- a/glanceclient/tests/unit/test_shell.py
++++ b/glanceclient/tests/unit/test_shell.py
+@@ -307,17 +307,6 @@ class ShellTest(testutils.TestCase):
+         self.assertEqual('mycert', args.os_cert)
+         self.assertEqual('mykey', args.os_key)
+ 
+-        # make sure we get the same thing with --cert-file and --key-file
+-        args = ('--os-image-api-version 2 '
+-                '--cert-file mycertfile '
+-                '--key-file mykeyfile image-list')
+-        glance_shell = openstack_shell.OpenStackImagesShell()
+-        glance_shell.main(args.split())
+-        assert mock_versioned_client.called
+-        ((api_version, args), kwargs) = mock_versioned_client.call_args
+-        self.assertEqual('mycertfile', args.os_cert)
+-        self.assertEqual('mykeyfile', args.os_key)
+-
+     @mock.patch('glanceclient.v1.client.Client')
+     def test_no_auth_with_token_and_image_url_with_v1(self, v1_client):
+         # test no authentication is required if both token and endpoint url
+diff --git a/releasenotes/notes/rm-deprecate-ssl-opts-c88225a4ba2285ad.yaml b/releasenotes/notes/rm-deprecate-ssl-opts-c88225a4ba2285ad.yaml
+new file mode 100644
+index 0000000..f3c66a5
+--- /dev/null
++++ b/releasenotes/notes/rm-deprecate-ssl-opts-c88225a4ba2285ad.yaml
+@@ -0,0 +1,9 @@
++---
++other:
++  - |
++    The following options to the command line client, which have been
++    deprecated since Icehouse, have been removed:
++
++    * ``--key-file`` (use ``--os-key`` instead)
++    * ``--ca-file`` (use ``--os-cacert`` instead)
++    * ``--cert-file`` (use ``--os-cert`` instead)
+-- 
+2.7.4
+

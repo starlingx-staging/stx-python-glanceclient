@@ -1,0 +1,301 @@
+From 7d17f85326d593ab54497ac4046461142ab49cad Mon Sep 17 00:00:00 2001
+From: Robert Church <robert.church@windriver.com>
+Date: Wed, 11 May 2016 00:12:34 -0500
+Subject: [PATCH 2/7] Pike Rebase: Raw Caching Support
+
+Updates v1 and v2 APIs
+
+- Add the --cache-raw option and two new columns to 'glance image-list',
+  one displays the caching status and the other one the cache size for
+  images that are in 'Cached' state.
+- Add the --wait  which can be used in two ways:
+   - --wait: the command waits for the caching to finish before
+       returning the image
+   - --wait <seconds>: the command waits for <seconds> for the caching
+       to finish before returning the image
+- At the end of the glance image-create command information about the
+  status of the caching process has been added.
+
+Related:
+ - Newton commits: (CGCS_DEV_0024) 96216ab
+ - Mitaka commits: (CGCS_DEV_0019) 00e1af4, f1560bb, b9408b3
+                   (CGCS_DEV_0019)_squash) 10cd346, 3779b2b
+ - Kilo commit: (CGCS_DEV_0016) 7e2c042, 18a4c77
+ - User Story: US68056
+
+(cherry picked from commit 10cd346a8c53e70ce8def8b11b604a09c8207a13)
+Signed-off-by: Robert Church <robert.church@windriver.com>
+
+and squashed
+
+(cherry picked from commit 3779b2bd6a6c566be642882eaf779ad3aa7381e3)
+Signed-off-by: Robert Church <robert.church@windriver.com>
+---
+ glanceclient/common/utils.py                | 37 +++++++++++++++++++++++++++++
+ glanceclient/tests/unit/v2/test_shell_v2.py |  9 +++----
+ glanceclient/v1/images.py                   | 10 ++++++--
+ glanceclient/v1/shell.py                    | 25 ++++++++++++++++++-
+ glanceclient/v2/shell.py                    | 27 ++++++++++++++++++++-
+ 5 files changed, 100 insertions(+), 8 deletions(-)
+
+diff --git a/glanceclient/common/utils.py b/glanceclient/common/utils.py
+index d194e65..27bfd86 100644
+--- a/glanceclient/common/utils.py
++++ b/glanceclient/common/utils.py
+@@ -24,6 +24,7 @@ import re
+ import six.moves.urllib.parse as urlparse
+ import sys
+ import threading
++import time
+ import uuid
+ 
+ import six
+@@ -397,6 +398,42 @@ def print_image(image_obj, human_readable=False, max_col_width=None):
+     else:
+         print_dict(image)
+ 
++CACHE_STATUS_CACHED = "Cached"
++CACHE_STATUS_ERROR = "Error"
++
++
++def wait_for_caching(interval, gc, id):
++    """Wait until image caching has finished."""
++    timeout = time.time() + float(interval)
++
++    while True:
++        # Obtain image metadata.
++        image = gc.images.get(id)
++
++        # If there is no caching information, return.
++        cache_status = getattr(image, "cache_raw_status", "")
++        if not cache_status:
++            print('INFO: There is no information available about the '
++                  'caching status.')
++            break
++
++        # If the caching status is 'Cached' or 'Error', return.
++        if cache_status == CACHE_STATUS_CACHED or \
++           cache_status == CACHE_STATUS_ERROR:
++            print('INFO: Image caching status: %s.' % cache_status)
++            break
++
++        # If the timeout has been reached, return.
++        if interval is not 0:
++            if time.time() > timeout:
++                print('INFO: The caching timeout of %s seconds has '
++                      'been reached. Image caching status: %s.' %
++                      (interval, cache_status))
++                break
++
++        # Sleep for a second to avoid flooding with requests.
++        time.sleep(1)
++
+ 
+ def integrity_iter(iter, checksum):
+     """Check image data integrity.
+diff --git a/glanceclient/tests/unit/v2/test_shell_v2.py b/glanceclient/tests/unit/v2/test_shell_v2.py
+index 4ac8c17..ffcdd85 100644
+--- a/glanceclient/tests/unit/v2/test_shell_v2.py
++++ b/glanceclient/tests/unit/v2/test_shell_v2.py
+@@ -189,7 +189,7 @@ class ShellV2Test(testtools.TestCase):
+                                                 sort_key=['name', 'id'],
+                                                 sort_dir=['desc', 'asc'],
+                                                 filters=exp_img_filters)
+-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
++            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
+ 
+     def test_do_image_list_with_single_sort_key(self):
+         input = {
+@@ -223,7 +223,7 @@ class ShellV2Test(testtools.TestCase):
+                                                 sort_key=['name'],
+                                                 sort_dir=['desc'],
+                                                 filters=exp_img_filters)
+-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
++            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
+ 
+     def test_do_image_list_new_sorting_syntax(self):
+         input = {
+@@ -257,7 +257,7 @@ class ShellV2Test(testtools.TestCase):
+                 page_size=18,
+                 sort='name:desc,size:asc',
+                 filters=exp_img_filters)
+-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
++            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
+ 
+     def test_do_image_list_with_property_filter(self):
+         input = {
+@@ -294,7 +294,8 @@ class ShellV2Test(testtools.TestCase):
+                                                 sort_key=['name'],
+                                                 sort_dir=['desc'],
+                                                 filters=exp_img_filters)
+-            utils.print_list.assert_called_once_with({}, ['ID', 'Name'])
++
++            utils.print_list.assert_called_once_with(mock.ANY, ['ID', 'Name'])
+ 
+     def test_do_image_show_human_readable(self):
+         args = self._make_args({'id': 'pass', 'page_size': 18,
+diff --git a/glanceclient/v1/images.py b/glanceclient/v1/images.py
+index 966d45a..4c2e912 100644
+--- a/glanceclient/v1/images.py
++++ b/glanceclient/v1/images.py
+@@ -31,7 +31,9 @@ UPDATE_PARAMS = ('name', 'disk_format', 'container_format', 'min_disk',
+                  # compatibility with the legacy client library
+                  'deleted')
+ 
+-CREATE_PARAMS = UPDATE_PARAMS + ('id', 'store')
++CREATE_PARAMS = UPDATE_PARAMS + ('id', 'store', 'cache_raw', 'wait')
++CACHE_STATUS_CACHED = "Cached"
++CACHE_STATUS_ERROR = "Error"
+ 
+ DEFAULT_PAGE_SIZE = 20
+ 
+@@ -315,6 +317,7 @@ class ImageManager(base.ManagerWithFind):
+                 raise TypeError(msg % field)
+ 
+         copy_from = fields.pop('copy_from', None)
++
+         hdrs = self._image_meta_to_headers(fields)
+         if copy_from is not None:
+             hdrs['x-glance-api-copy-from'] = copy_from
+@@ -322,11 +325,14 @@ class ImageManager(base.ManagerWithFind):
+         resp, body = self.client.post('/v1/images',
+                                       headers=hdrs,
+                                       data=image_data)
++        # Save image information.
++        image_info = body['image']
++
+         return_request_id = kwargs.get('return_req_id', None)
+         if return_request_id is not None:
+             return_request_id.append(resp.headers.get(OS_REQ_ID_HDR, None))
+ 
+-        return Image(self, self._format_image_meta_for_user(body['image']))
++        return Image(self, self._format_image_meta_for_user(image_info))
+ 
+     def update(self, image, **kwargs):
+         """Update an image.
+diff --git a/glanceclient/v1/shell.py b/glanceclient/v1/shell.py
+index fff7490..790be5e 100644
+--- a/glanceclient/v1/shell.py
++++ b/glanceclient/v1/shell.py
+@@ -118,8 +118,17 @@ def do_image_list(gc, args):
+ 
+         images = (convert_size(image) for image in images)
+ 
++    def add_attributes(image):
++        image.raw_cache = getattr(image,
++                                  "properties", {}).get("cache_raw_status", "")
++        image.cache_size = getattr(image,
++                                   "properties", {}).get("cache_raw_size", "")
++        return image
++
++    images = (add_attributes(image) for image in images)
++
+     columns = ['ID', 'Name', 'Disk Format', 'Container Format',
+-               'Size', 'Status']
++               'Size', 'Status', 'Cache Size', 'Raw Cache']
+     utils.print_list(images, columns)
+ 
+ 
+@@ -177,6 +186,13 @@ def do_image_download(gc, args):
+            help='ID of image to reserve.')
+ @utils.arg('--name', metavar='<NAME>',
+            help='Name of image.')
++@utils.arg('--cache-raw', action='store_true', default=False,
++           help=('Convert the image to RAW in the background'
++                 ' and store it for fast access.'))
++@utils.arg('--wait', metavar='<WAIT>', nargs='?',
++           type=int, default=None, const=0,
++           help=('Wait for the convertion of the image to RAW'
++                 ' to finish before returning the image.'))
+ @utils.arg('--store', metavar='<STORE>',
+            help='Store to upload image to.')
+ @utils.arg('--disk-format', metavar='<DISK_FORMAT>',
+@@ -245,6 +261,11 @@ def do_image_create(gc, args):
+ 
+     _set_data_field(fields, args)
+ 
++    cache_raw = fields.pop('cache_raw', False)
++    cache_raw_wait = fields.pop('wait', None)
++    if cache_raw:
++        fields['properties']['cache_raw'] = cache_raw
++
+     # Only show progress bar for local image files
+     if fields.get('data') and args.progress:
+         filesize = utils.get_file_size(fields['data'])
+@@ -256,6 +277,8 @@ def do_image_create(gc, args):
+             )
+ 
+     image = gc.images.create(**fields)
++    if cache_raw is not False and cache_raw_wait is not None:
++        utils.wait_for_caching(cache_raw_wait, gc, image.id)
+     _image_show(image, args.human_readable)
+ 
+ 
+diff --git a/glanceclient/v2/shell.py b/glanceclient/v2/shell.py
+index 131e826..ff21048 100644
+--- a/glanceclient/v2/shell.py
++++ b/glanceclient/v2/shell.py
+@@ -59,6 +59,13 @@ def get_image_schema():
+                   'passed to the client via stdin.'))
+ @utils.arg('--progress', action='store_true', default=False,
+            help=_('Show upload progress bar.'))
++@utils.arg('--cache-raw', action='store_true', default=False,
++           help=('Convert the image to RAW in the background'
++                 ' and store it for fast access.'))
++@utils.arg('--wait', metavar='<WAIT>', nargs='?',
++           type=int, default=None, const=0,
++           help=('Wait for the convertion of the image to RAW'
++                 ' to finish before returning the image.'))
+ @utils.on_data_require_fields(DATA_FIELDS)
+ def do_image_create(gc, args):
+     """Create a new image."""
+@@ -66,10 +73,17 @@ def do_image_create(gc, args):
+     _args = [(x[0].replace('-', '_'), x[1]) for x in vars(args).items()]
+     fields = dict(filter(lambda x: x[1] is not None and
+                          (x[0] == 'property' or
++                          x[0] == 'cache_raw' or
++                          x[0] == 'wait' or
+                           schema.is_core_property(x[0])),
+                          _args))
+ 
+     raw_properties = fields.pop('property', [])
++    cache_raw = fields.pop('cache_raw', False)
++    cache_raw_wait = fields.pop('wait', None)
++
++    if cache_raw is not False:
++        raw_properties += ['cache_raw=True']
+     for datum in raw_properties:
+         key, value = datum.split('=', 1)
+         fields[key] = value
+@@ -84,6 +98,10 @@ def do_image_create(gc, args):
+             args.id = image['id']
+             args.size = None
+             do_image_upload(gc, args)
++            # If cache_raw and wait options were chosen, wait until
++            # image is cached.
++            if cache_raw is not False and cache_raw_wait is not None:
++                utils.wait_for_caching(cache_raw_wait, gc, args.id)
+             image = gc.images.get(args.id)
+     finally:
+         utils.print_image(image)
+@@ -234,9 +252,16 @@ def do_image_list(gc, args):
+ 
+     if args.verbose:
+         columns += ['Disk_format', 'Container_format', 'Size', 'Status',
+-                    'Owner']
++                    'Cache Size', 'Raw Cache', 'Owner']
+ 
+     images = gc.images.list(**kwargs)
++
++    def add_attributes(image):
++        image.raw_cache = getattr(image, "cache_raw_status", "")
++        image.cache_size = getattr(image, "cache_raw_size", "")
++        return image
++    images = (add_attributes(image) for image in images)
++
+     utils.print_list(images, columns)
+ 
+ 
+-- 
+2.7.4
+

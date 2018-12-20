@@ -1,0 +1,65 @@
+From 75967f4c9c9ca582277d036581effcac0c7ee5a9 Mon Sep 17 00:00:00 2001
+From: Robert Church <robert.church@windriver.com>
+Date: Wed, 11 May 2016 00:18:14 -0500
+Subject: [PATCH 3/7] Pike Rebase: Show glance_backend rbd or file
+
+commit ba2d65b37333f43c031835d25f5029a88595fbe2
+Author: Jack Ding <jack.ding@windriver.com>
+Date:   Mon May 9 20:54:08 2016 -0400
+
+    show glance_backend rbd or file
+
+    - change glance_backend from 'ceph/lvm' to 'rbd/file'
+    - add glance_backend value to initial config
+    - change system storage-backend-add parameter --ceph_xxx_xxx to -ceph-xxx-xxx
+    - add default ceph_mon_dev value in new ceph backend
+
+Related:
+ - Newton commits: (CGCS_DEV_0024) 86ef833
+ - Mitaka commits: (CGCS_DEV_0019) e26ab56, 0b42114
+                   (CGCS_DEV_0019_squash) 2e187fa, 2566073
+ - Kilo commit: (CGCS_DEV_0016) 25ae839
+ 
+(cherry picked from commit 2e187fa593f36ed0568e330b841b44b8ba733bd8)
+Signed-off-by: Robert Church <robert.church@windriver.com>
+
+and squashed
+
+(cherry picked from commit 25660734ccf5ed713332c026e2aa9db1e09bfb7c)
+Signed-off-by: Robert Church <robert.church@windriver.com>
+---
+ glanceclient/v1/shell.py | 2 +-
+ glanceclient/v2/shell.py | 4 ++--
+ 2 files changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/glanceclient/v1/shell.py b/glanceclient/v1/shell.py
+index 790be5e..eaf1e9d 100644
+--- a/glanceclient/v1/shell.py
++++ b/glanceclient/v1/shell.py
+@@ -127,7 +127,7 @@ def do_image_list(gc, args):
+ 
+     images = (add_attributes(image) for image in images)
+ 
+-    columns = ['ID', 'Name', 'Disk Format', 'Container Format',
++    columns = ['ID', 'Name', 'Store', 'Disk Format', 'Container Format',
+                'Size', 'Status', 'Cache Size', 'Raw Cache']
+     utils.print_list(images, columns)
+ 
+diff --git a/glanceclient/v2/shell.py b/glanceclient/v2/shell.py
+index ff21048..0dc4ef4 100644
+--- a/glanceclient/v2/shell.py
++++ b/glanceclient/v2/shell.py
+@@ -251,8 +251,8 @@ def do_image_list(gc, args):
+     columns = ['ID', 'Name']
+ 
+     if args.verbose:
+-        columns += ['Disk_format', 'Container_format', 'Size', 'Status',
+-                    'Cache Size', 'Raw Cache', 'Owner']
++        columns += ['Store', 'Disk_format', 'Container_format',
++                    'Size', 'Status', 'Cache Size', 'Raw Cache', 'Owner']
+ 
+     images = gc.images.list(**kwargs)
+ 
+-- 
+2.7.4
+

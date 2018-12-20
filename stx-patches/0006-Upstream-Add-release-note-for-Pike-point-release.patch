@@ -1,0 +1,36 @@
+From 1ffa0ae8511aab3326014a8e5028352396545a8c Mon Sep 17 00:00:00 2001
+From: Brian Rosmaita <rosmaita.fossdev@gmail.com>
+Date: Thu, 30 Nov 2017 10:15:41 -0500
+Subject: [PATCH 6/7] Upstream: Add release note for Pike point release
+
+Change-Id: I20c64c264dd7f47dbf9a94dead6bcc70f9b704ad
+---
+ .../notes/pike-update-relnote-ab77b01aa8799f22.yaml      | 16 ++++++++++++++++
+ 1 file changed, 16 insertions(+)
+ create mode 100644 releasenotes/notes/pike-update-relnote-ab77b01aa8799f22.yaml
+
+diff --git a/releasenotes/notes/pike-update-relnote-ab77b01aa8799f22.yaml b/releasenotes/notes/pike-update-relnote-ab77b01aa8799f22.yaml
+new file mode 100644
+index 0000000..9ea133f
+--- /dev/null
++++ b/releasenotes/notes/pike-update-relnote-ab77b01aa8799f22.yaml
+@@ -0,0 +1,16 @@
++---
++prelude: >
++  This update contains bug fixes for the interoperable image import
++  functionality introduced into Glance as an EXPERIMENTAL API during
++  the Pike cycle.
++fixes:
++  - |
++    The following bug fixes are included in this release:
++
++    * Bug 1711090_: stage call fails with TypeError
++    * Bug 1711259_: Fix image-import call
++    * Bug 1711511_: image-create-via-import fails with ValueError
++
++    .. _1711090: https://code.launchpad.net/bugs/1711090
++    .. _1711259: https://code.launchpad.net/bugs/1711259
++    .. _1711511: https://code.launchpad.net/bugs/1711511
+-- 
+2.7.4
+

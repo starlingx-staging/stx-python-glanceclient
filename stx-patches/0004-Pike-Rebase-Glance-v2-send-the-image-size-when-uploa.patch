@@ -1,0 +1,92 @@
+From 919eb1d7d4a97365c3ffd7157824b83477f90430 Mon Sep 17 00:00:00 2001
+From: Elena Taivan <elena.taivan@windriver.com>
+Date: Tue, 11 Oct 2016 10:20:24 +0000
+Subject: [PATCH 4/7] Pike Rebase: Glance v2 send the image size when uploading
+ it
+
+On a CEPH setup, trying to upload an image when there is not enough
+space, result in a wrong error and data not cleaned
+
+v2: send the image size when uploading it.
+
+Currently, when using v2 and sending an image chunk by chunk, we do not
+send the total size of the image. This cannot be done using the
+Content-Length header, since this would imply that we send the image
+"all at once", so let's just use the same header as in v1.
+
+Based on commit in review 669dabac5fa262ec68bc8d9dddb6fdaf56515501.
+Bug: #1627147
+
+Related:
+  - Newton commits: (CGCS_DEV_0024) 4ffa20f
+  - Mitaka commits: (CGCS_DEV_0019) 3d1d0db, 242f1f3
+                    (CGCS_DEV_0019_squash) 271bdf5
+
+(cherry picked from commit 271bdf5fb77b710655d60004069171f7293525a8)
+Signed-off-by: Robert Church <robert.church@windriver.com>
+---
+ glanceclient/tests/unit/v2/test_images.py | 6 ++++--
+ glanceclient/v2/images.py                 | 5 ++++-
+ glanceclient/v2/shell.py                  | 5 +++--
+ 3 files changed, 11 insertions(+), 5 deletions(-)
+
+diff --git a/glanceclient/tests/unit/v2/test_images.py b/glanceclient/tests/unit/v2/test_images.py
+index 579392b..1087cc3 100644
+--- a/glanceclient/tests/unit/v2/test_images.py
++++ b/glanceclient/tests/unit/v2/test_images.py
+@@ -819,7 +819,8 @@ class TestController(testtools.TestCase):
+         image_id = '606b0e88-7c5a-4d54-b5bb-046105d4de6f'
+         self.controller.upload(image_id, image_data)
+         expect = [('PUT', '/v2/images/%s/file' % image_id,
+-                  {'Content-Type': 'application/octet-stream'},
++                  {'Content-Type': 'application/octet-stream',
++                   'x-image-meta-size': 'None'},
+                   image_data)]
+         self.assertEqual(expect, self.api.calls)
+ 
+@@ -828,7 +829,8 @@ class TestController(testtools.TestCase):
+         image_id = '606b0e88-7c5a-4d54-b5bb-046105d4de6f'
+         self.controller.upload(image_id, image_data, image_size=3)
+         expect = [('PUT', '/v2/images/%s/file' % image_id,
+-                  {'Content-Type': 'application/octet-stream'},
++                  {'Content-Type': 'application/octet-stream',
++                   'x-image-meta-size': '3'},
+                   image_data)]
+         self.assertEqual(expect, self.api.calls)
+ 
+diff --git a/glanceclient/v2/images.py b/glanceclient/v2/images.py
+index 29abc30..11df6c9 100644
+--- a/glanceclient/v2/images.py
++++ b/glanceclient/v2/images.py
+@@ -227,7 +227,10 @@ class Controller(object):
+         :param u_url: Upload url to upload the data to.
+         """
+         url = u_url or '/v2/images/%s/file' % image_id
+-        hdrs = {'Content-Type': 'application/octet-stream'}
++        hdrs = {
++            'Content-Type': 'application/octet-stream',
++            'x-image-meta-size': str(image_size)
++        }
+         body = image_data
+         resp, body = self.http_client.put(url, headers=hdrs, data=body)
+         return (resp, body), resp
+diff --git a/glanceclient/v2/shell.py b/glanceclient/v2/shell.py
+index 0dc4ef4..c0baa53 100644
+--- a/glanceclient/v2/shell.py
++++ b/glanceclient/v2/shell.py
+@@ -94,9 +94,10 @@ def do_image_create(gc, args):
+                    "privileges to it" % file_name)
+     image = gc.images.create(**fields)
+     try:
+-        if utils.get_data_file(args) is not None:
++        image_data = utils.get_data_file(args)
++        if image_data is not None:
+             args.id = image['id']
+-            args.size = None
++            args.size = utils.get_file_size(image_data)
+             do_image_upload(gc, args)
+             # If cache_raw and wait options were chosen, wait until
+             # image is cached.
+-- 
+2.7.4
+
