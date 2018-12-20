@@ -1,0 +1,84 @@
+From a8a0e040b00caf5c9d0a8af258246b755462896b Mon Sep 17 00:00:00 2001
+From: Litao Gao <litao.gao@windriver.com>
+Date: Thu, 23 Mar 2017 08:41:36 -0400
+Subject: [PATCH 5/7] Pike Rebase: Timezone support
+
+ENG: Support for timezone setting - 17.x
+
+Add support for timestamp display per timezone
+
+Related:
+  - Newton commits: (CGCS_DEV_0027) d7aa21b
+---
+ glanceclient/common/utils.py | 35 ++++++++++++++++++++++++++++++++++-
+ 1 file changed, 34 insertions(+), 1 deletion(-)
+
+diff --git a/glanceclient/common/utils.py b/glanceclient/common/utils.py
+index 27bfd86..52f5bb3 100644
+--- a/glanceclient/common/utils.py
++++ b/glanceclient/common/utils.py
+@@ -15,6 +15,7 @@
+ 
+ from __future__ import print_function
+ 
++import dateutil
+ import errno
+ import functools
+ import hashlib
+@@ -27,6 +28,9 @@ import threading
+ import time
+ import uuid
+ 
++from datetime import datetime
++from dateutil import parser
++
+ import six
+ 
+ if os.name == 'nt':
+@@ -202,13 +206,42 @@ def print_list(objs, fields, formatters=None, field_settings=None):
+     print(encodeutils.safe_decode(pt.get_string()))
+ 
+ 
++def parse_date(string_data):
++    """Parses a dateinput string into a timezone aware Python datetime."""
++
++    if not isinstance(string_data, six.string_types):
++        return string_data
++
++    pattern = r'(\d{4}-\d{2}-\d{2}[T ])?\d{2}:\d{2}:\d{2}(\.\d{6})?Z?'
++
++    def convert_date(matchobj):
++        formats = ["%Y-%m-%dT%H:%M:%S.%f", "%Y-%m-%d %H:%M:%S.%f",
++                   "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S",
++                   "%Y-%m-%dT%H:%M:%SZ", "%H:%M:%S"]
++        datestring = matchobj.group(0)
++        if datestring:
++            for format in formats:
++                try:
++                    datetime.strptime(datestring, format)
++                    datestring += "+0000"
++                    parsed = parser.parse(datestring)
++                    converted = parsed.astimezone(dateutil.tz.tzlocal())
++                    return datetime.strftime(converted, format)
++                except Exception:
++                    pass
++        return datestring
++
++    return re.sub(pattern, convert_date, string_data)
++
++
+ def print_dict(d, max_column_width=80):
+     pt = prettytable.PrettyTable(['Property', 'Value'], caching=False)
+     pt.align = 'l'
+     pt.max_width = max_column_width
+-    for k, v in d.items():
++    for k, v in six.iteritems(d):
+         if isinstance(v, (dict, list)):
+             v = json.dumps(v)
++        v = parse_date(v)
+         pt.add_row([k, v])
+     print(encodeutils.safe_decode(pt.get_string(sortby='Property')))
+ 
+-- 
+2.7.4
+
